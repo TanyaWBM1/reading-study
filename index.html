@@ -61,6 +61,8 @@
   "use strict";
   var app = document.getElementById("app");
   var TRIALS_PER_PERSON = 8;
+  // Formspree endpoint for automatic submission; copy-back remains the fallback.
+  var SUBMIT_ENDPOINT = "https://formspree.io/f/xzdlowoa";
 
   var QUESTIONS = [
     { key: "clarity", text: "If this message were sent to you, which version would leave you more certain what it means and what to do next?" },
@@ -114,8 +116,8 @@
       '<p>You will see <strong>9 short messages</strong>, each in two versions, A and B. ' +
       'For each one, answer three quick questions about which version works better for you as a reader. ' +
       'There are no right answers — go with your honest reaction. It takes about 10 minutes.</p>' +
-      '<p class="muted">This study is anonymous. Nothing is collected automatically and nothing leaves this page — ' +
-      'at the end you will get a small block of text with your answers to send back to the person who gave you this link. ' +
+      '<p class="muted">This study is anonymous — no name, email, or personal details are asked for or recorded. ' +
+      'Your answers are sent to the study organizer when you click Finish on the last screen, and not before. ' +
       'Aggregated results will be published in a public research repository. ' +
       'By continuing, you agree to take part.</p>' +
       '<button id="start">Start</button></div>';
@@ -169,22 +171,43 @@
     document.getElementById("finish").onclick = function () {
       record.comment = document.getElementById("cmt").value.trim();
       record.finishedAt = new Date().toISOString();
-      done();
+      submit();
     };
   }
 
-  function done() {
-    var blob = JSON.stringify(record);
+  var DEBRIEF =
+    '<p class="muted">What this was: one version of each message had been rewritten using a public editing method. ' +
+    "Your answers help test whether the rewrites actually read better for real people. " +
+    "Results will be published in aggregate, never individually. Thank you for helping.</p>";
+
+  function submit() {
+    app.innerHTML = '<h1>Sending…</h1><div class="card"><p class="muted">Submitting your answers.</p></div>';
+    fetch(SUBMIT_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ participant: record.participant, responses: JSON.stringify(record) })
+    }).then(function (r) {
+      if (r.ok) return sent();
+      fallback();
+    }).catch(fallback);
+  }
+
+  function sent() {
     app.innerHTML =
       '<h1>Thank you!</h1><div class="card">' +
-      '<p><strong>Last step:</strong> copy the block below and send it back to the person who gave you this link ' +
-      "(message or email — whatever is easiest). That block is your anonymous answers; nothing was sent automatically.</p>" +
+      "<p>Your answers were sent anonymously. You're done — nothing else to do.</p>" + DEBRIEF + "</div>";
+  }
+
+  function fallback() {
+    var blob = JSON.stringify(record);
+    app.innerHTML =
+      '<h1>One more step</h1><div class="card">' +
+      "<p>Automatic sending didn't work (an ad blocker or network hiccup can cause this — no harm done). " +
+      '<strong>Please copy the block below and send it back to the person who gave you this link</strong> ' +
+      "(message or email — whatever is easiest). It contains only your anonymous answers.</p>" +
       '<button id="copy">Copy my answers</button> ' +
       '<button class="secondary" id="show">Show the block</button>' +
-      '<pre class="out" id="out" hidden></pre>' +
-      '<p class="muted">What this was: one version of each message had been rewritten using a public editing method. ' +
-      "Your answers help test whether the rewrites actually read better for real people. " +
-      "Results will be published in aggregate, never individually. Thank you for helping.</p></div>";
+      '<pre class="out" id="out" hidden></pre>' + DEBRIEF + "</div>";
     var out = document.getElementById("out");
     out.textContent = blob;
     document.getElementById("show").onclick = function () { out.hidden = !out.hidden; };
